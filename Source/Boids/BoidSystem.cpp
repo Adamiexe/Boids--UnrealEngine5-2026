@@ -71,6 +71,8 @@ void UBoidSystem::Update(const float DeltaTime)
     double StartNeighborsTime = 0.0;
     if (bEnableProfiling) StartNeighborsTime = FPlatformTime::Seconds();
     FindAllNeighbors();
+    if (bEnableProfiling){ProfilingData.NumNeighbors = 
+        NeighborCache.Neighbors[OwnerManager->GetDebugBoidIndex()].Num();}
     
     if (bEnableProfiling) ProfilingData.FindNeighborsTime = FPlatformTime::Seconds() - StartNeighborsTime;
     
@@ -671,3 +673,4 @@ void UBoidSystem::FindAllNeighbors()
     
     LastFrameMaxNeighbors = FMath::Max(1, MaxNeighborsThisFrame + (MaxNeighborsThisFrame / 4));
 }
+

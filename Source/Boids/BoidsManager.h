@@ -5,6 +5,7 @@
 #include "Components/BoxComponent.h"
 #include "BoidsManager.generated.h"
 
+
 //////// FORWARD DECLARATION ////////
 class UBoidSystem;
 class ABoid;
@@ -92,6 +93,9 @@ public:
     UFUNCTION(BlueprintPure, Category = "Boids|Obstacle Avoidance")
     FORCEINLINE int32 GetNumberOfRaycasts() const { return NumberOfRaycasts; }
     
+    UFUNCTION(BlueprintPure, Category = "Boids|Observed Unit")
+    FORCEINLINE int32 GetDebugBoidIndex()const{ return DebugBoidIndex;}
+    
     // Boundary
     UFUNCTION(BlueprintPure, Category = "Boids|Obstacle Avoidance")
     FORCEINLINE float GetBoundaryWeight() const { return BoundaryWeight; }
@@ -145,6 +149,9 @@ public:
     
     UFUNCTION(BlueprintCallable, Category = "Boids|Obstacle Avoidance")
     void SetUseUniformDistribution(const bool bNewValue);
+
+    UFUNCTION(BlueprintCallable, Category = "Boids|Observed Unit")
+    void SetDebugBoidIndex(const int32 NewValue);
 
 protected:
     //////// PROPERTIES ////////
@@ -207,4 +214,11 @@ private:
 
     UPROPERTY(EditAnywhere, Category = "Boids|Debug", meta = (EditCondition = "bEnableObstacleAvoidance"))
     bool bDebugRaycasts = false;
+    
+    UPROPERTY(EditAnywhere, Category = "Boids|Debug", meta = (ClampMin = "0", ClampMax = "2000"))
+    int32 DebugBoidIndex = 0;
+    
+#if WITH_EDITOR
+    virtual void PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent) override;
+#endif
 };

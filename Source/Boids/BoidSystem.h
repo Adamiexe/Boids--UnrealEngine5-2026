@@ -72,8 +72,7 @@ public:
 
     /// Obstacle Avoidance
     void SetUseUniformDistribution(const bool bInUseUniformDistribution);
-
-private:
+    
     //////// STRUCTS ////////
     /// Cache
     struct FBoidNeighborCache
@@ -82,6 +81,13 @@ private:
         FORCEINLINE void Initialize(const int32 NumBoids) { Neighbors.SetNum(NumBoids); }
         FORCEINLINE void Clear() { for (auto& List : Neighbors) List.Empty(); }
     };
+    
+    FORCEINLINE const TArray<int32>& GetNeighbors(const int32 Index) const
+    {
+        static const TArray<int32> EmptyArray;
+        return NeighborCache.Neighbors.IsValidIndex(Index) ? NeighborCache.Neighbors[Index] : EmptyArray;
+    }
+private:
     
     // Profiling
     struct FProfilingData
@@ -92,6 +98,7 @@ private:
         double BoundaryForcesTime = 0.0;
         double ObstacleAvoidanceTime = 0.0;
         double UpdatePositionsTime = 0.0;
+        int32 NumNeighbors = 0;
         
         void LogResults() const
         {
@@ -99,6 +106,7 @@ private:
             UE_LOG(LogTemp, Warning, TEXT("Update total: %.3f ms"), UpdateTotal * 1000.0);
             UE_LOG(LogTemp, Warning, TEXT("FindNeighbors: %.3f ms (%.1f%%)"), 
                 FindNeighborsTime * 1000.0, (FindNeighborsTime / UpdateTotal) * 100.0);
+            UE_LOG(LogTemp, Warning, TEXT("Number of Neighbors: %d"), NumNeighbors);
             UE_LOG(LogTemp, Warning, TEXT("FlockingForces: %.3f ms (%.1f%%)"), 
                 FlockingForcesTime * 1000.0, (FlockingForcesTime / UpdateTotal) * 100.0);
             UE_LOG(LogTemp, Warning, TEXT("BoundaryForces: %.3f ms (%.1f%%)"), 

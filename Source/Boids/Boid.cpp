@@ -1,5 +1,6 @@
 ﻿#include "Boid.h"
 #include "BoidSystem.h"
+#include "BoidsManager.h"
 
 /**
  * @brief Default constructor
@@ -157,4 +158,31 @@ void ABoid::DebugDrawRaycasts() const
             );
         }
     }
+	if (BoidIndex== BoidsManager->GetDebugBoidIndex() )
+	{
+		DrawDebugSphere(GetWorld(),
+			CurrentLocation,
+			BoidsManager->GetPerceptionRadius(),
+			8,
+			FColor::Red,
+			false,
+			0.0f,
+			0,
+			1.0f
+			);
+		
+		for (const int32 NeighborIdx : BoidSystem->GetNeighbors(BoidIndex))
+		{
+			DrawDebugLine(
+				GetWorld(),
+				CurrentLocation,
+				BoidSystem->GetPosition(NeighborIdx),
+				FColor::Blue,
+				false,
+				0.0f,
+				0,
+				20.0f
+				);
+		}
+	}
 }

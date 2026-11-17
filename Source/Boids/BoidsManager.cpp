@@ -391,3 +391,25 @@ void ABoidsManager::SetUseUniformDistribution(const bool bNewValue)
 		BoidSystem->SetUseUniformDistribution(bUseUniformDistribution);
 	}
 }
+
+void ABoidsManager::SetDebugBoidIndex(const int32 NewValue)
+{
+	DebugBoidIndex = NewValue;
+}
+
+#if WITH_EDITOR
+void ABoidsManager::PostEditChangeProperty(FPropertyChangedEvent& PropertyChangedEvent)
+{
+	Super::PostEditChangeProperty(PropertyChangedEvent);
+
+	const FName PropertyName = (PropertyChangedEvent.Property != nullptr) 
+		? PropertyChangedEvent.Property->GetFName() 
+		: NAME_None;
+
+	if (PropertyName == GET_MEMBER_NAME_CHECKED(ABoidsManager, DebugBoidIndex) ||
+		PropertyName == GET_MEMBER_NAME_CHECKED(ABoidsManager, NumberOfBoids))
+	{
+		DebugBoidIndex = FMath::Clamp(DebugBoidIndex, 0, FMath::Max(0, NumberOfBoids - 1));
+	}
+}
+#endif
