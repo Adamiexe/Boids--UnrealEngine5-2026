@@ -352,6 +352,11 @@ Key optimizations that contributed to the 96-98% performance improvement:
    - Emergency collision avoidance takes precedence
    - Dynamic force weighting based on situation
 
+5. **Spatial Hash Grid**
+   - Efficient spatial partitioning for fast neighbor queries
+   - Adjustable cell size for optimal performance
+   - Debug draw for visualizing the grid
+
 ## How to Use the Project
 
 There are two ways to use and configure the Boids simulation: directly in the Unreal Engine editor for development, or through the compiled version.
@@ -418,10 +423,6 @@ Both the editor and compiled versions allow real-time adjustments to see immedia
 - Adjust **Number of Raycasts** to balance between detection accuracy and performance
 
 ## Possible Improvements
-
-1. **Spatial Partitioning**
-   - Implement quadtree/octree for neighbor search optimization
-   - Use grid-based spatial hashing for constant-time lookups
 
 2. **Rendering Optimizations**
    - Implement Instanced Static Meshes (ISM) for more efficient rendering

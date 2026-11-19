@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
+#include "SHG/SpatialHashGrid.h"
 #include "BoidSystem.generated.h"
 
 //////// FORWARD DECLARATION ////////
@@ -37,8 +38,13 @@ public:
     void SetObstacleAvoidanceParameters(const float InObstacleAvoidanceWeight, const float InObstacleDetectionDistance, 
         const int32 InNumberOfRaycasts, const bool bInEnableObstacleAvoidance);
 
+    void SetSpatialGridParameters(const FVector& InBoxCenter, const FVector& InBoxExtent, const float InCellSize);
+
     /// Obstacle Avoidance
     void GenerateRaycastRotators();
+
+    /// Debug
+    void DrawDebugSpatialGrid() const;
 
     //////// GETTERS ////////
     /// Positioning
@@ -60,6 +66,9 @@ public:
     FORCEINLINE const TArray<FRotator>& GetRaycastRotators() const { return RaycastRotators; }
     
     FORCEINLINE bool GetDebugDraw() const { return bEnableObstacleAvoidance; }
+
+    /// Spatial Grid
+    FORCEINLINE const FSpatialHashGrid& GetSpatialGrid() const { return SpatialGrid; }
 
     //////// SETTERS ////////
     /// Positioning
@@ -87,12 +96,13 @@ public:
         static const TArray<int32> EmptyArray;
         return NeighborCache.Neighbors.IsValidIndex(Index) ? NeighborCache.Neighbors[Index] : EmptyArray;
     }
+
 private:
-    
     // Profiling
     struct FProfilingData
     {
         double UpdateTotal = 0.0;
+        double SpatialGridBuildTime = 0.0;
         double FindNeighborsTime = 0.0;
         double FlockingForcesTime = 0.0;
         double BoundaryForcesTime = 0.0;
@@ -104,6 +114,8 @@ private:
         {
             UE_LOG(LogTemp, Warning, TEXT("--- BOIDS PROFILING ---"));
             UE_LOG(LogTemp, Warning, TEXT("Update total: %.3f ms"), UpdateTotal * 1000.0);
+            UE_LOG(LogTemp, Warning, TEXT("SpatialGridBuild: %.3f ms (%.1f%%)"), 
+                SpatialGridBuildTime * 1000.0, (SpatialGridBuildTime / UpdateTotal) * 100.0);
             UE_LOG(LogTemp, Warning, TEXT("FindNeighbors: %.3f ms (%.1f%%)"), 
                 FindNeighborsTime * 1000.0, (FindNeighborsTime / UpdateTotal) * 100.0);
             UE_LOG(LogTemp, Warning, TEXT("Number of Neighbors: %d"), NumNeighbors);
@@ -155,6 +167,12 @@ private:
     TArray<FVector> CachedCohesionForces;
     TArray<FVector> CachedBoundaryForces;
     TArray<FVector> CachedObstacleAvoidanceForces;
+
+    /// Spatial Hash Grid
+    FSpatialHashGrid SpatialGrid;
+    FVector GridBoxCenter = FVector::ZeroVector;
+    FVector GridBoxExtent = FVector(500.0f, 500.0f, 500.0f);
+    float GridCellSize = 200.0f;
 
     /// Collision
     bool bUseUniformDistribution;

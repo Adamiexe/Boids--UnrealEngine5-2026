@@ -1,6 +1,7 @@
 ﻿#include "BoidSystem.h"
 #include "BoidsManager.h"
 #include "Boid.h"
+#include "DrawDebugHelpers.h"
 
 /**
  * @brief Default constructor
@@ -51,6 +52,14 @@ void UBoidSystem::Initialize(const int32 NumBoids, const TArray<FVector>& Initia
             GlobalObstacleQueryParams.AddIgnoredActor(Boid);
         }
     }
+
+    if (OwnerManager)
+    {
+        GridBoxCenter = OwnerManager->BoxCenter;
+        GridBoxExtent = OwnerManager->BoxExtent;
+        GridCellSize = OwnerManager->CellSize > 0.0f ? OwnerManager->CellSize : PerceptionRadius;
+    }
+    SpatialGrid.Initialize(GridBoxCenter, GridBoxExtent, GridCellSize, NumBoids);
 }
 
 /**
@@ -68,15 +77,32 @@ void UBoidSystem::Update(const float DeltaTime)
         StartUpdateTime = FPlatformTime::Seconds();
     }
     
+    const int32 NumBoids = Positions.Num();
+
+    // Rebuild Spatial Hash Grid
+    double StartGridTime = 0.0;
+    if (bEnableProfiling) StartGridTime = FPlatformTime::Seconds();
+
+    SpatialGrid.Clear();
+    SpatialGrid.PrepareBoids(NumBoids);
+    for (int32 i = 0; i < NumBoids; ++i)
+    {
+        SpatialGrid.Insert(i, Positions[i]);
+    }
+
+    if (bEnableProfiling) ProfilingData.SpatialGridBuildTime = FPlatformTime::Seconds() - StartGridTime;
+
+    // Find Neighbors using Spatial Hash Grid
     double StartNeighborsTime = 0.0;
     if (bEnableProfiling) StartNeighborsTime = FPlatformTime::Seconds();
     FindAllNeighbors();
-    if (bEnableProfiling){ProfilingData.NumNeighbors = 
-        NeighborCache.Neighbors[OwnerManager->GetDebugBoidIndex()].Num();}
+    if (bEnableProfiling && OwnerManager && NeighborCache.Neighbors.IsValidIndex(OwnerManager->GetDebugBoidIndex()))
+    {
+        ProfilingData.NumNeighbors = NeighborCache.Neighbors[OwnerManager->GetDebugBoidIndex()].Num();
+    }
     
     if (bEnableProfiling) ProfilingData.FindNeighborsTime = FPlatformTime::Seconds() - StartNeighborsTime;
     
-    const int32 NumBoids = Positions.Num();
     if (CachedSeparationForces.Num() < NumBoids)
     {
         CachedSeparationForces.SetNum(NumBoids);
@@ -166,6 +192,12 @@ void UBoidSystem::Update(const float DeltaTime)
             FrameCounter = 0;
         }
     }
+
+    // 3. Debug visualization of spatial grid
+    if (OwnerManager && OwnerManager->GetDebugDrawGrid())
+    {
+        DrawDebugSpatialGrid();
+    }
 }
 
 /**
@@ -205,7 +237,7 @@ void UBoidSystem::SetBehaviorParameters(const float InSeparationWeight, const fl
  * @param InNumberOfRaycasts Number of rays used for obstacle detection
  * @param bInEnableObstacleAvoidance Whether obstacle avoidance is active
  */
-void UBoidSystem::SetObstacleAvoidanceParameters(const float InObstacleAvoidanceWeight, const float InObstacleDetectionDistance,
+void UBoidSystem::SetObstacleAvoidanceParameters(const float InObstacleAvoidanceWeight, const float InObstacleDetectionDistance, 
     const int32 InNumberOfRaycasts, const bool bInEnableObstacleAvoidance)
 {
     ObstacleAvoidanceWeight = InObstacleAvoidanceWeight;
@@ -218,6 +250,84 @@ void UBoidSystem::SetObstacleAvoidanceParameters(const float InObstacleAvoidance
     }
     
     bEnableObstacleAvoidance = bInEnableObstacleAvoidance;
+}
+
+/**
+ * @brief Updates spatial grid configuration and bounds
+ */
+void UBoidSystem::SetSpatialGridParameters(const FVector& InBoxCenter, const FVector& InBoxExtent, const float InCellSize)
+{
+    GridBoxCenter = InBoxCenter;
+    GridBoxExtent = InBoxExtent;
+    GridCellSize = FMath::Max(10.0f, InCellSize);
+
+    SpatialGrid.Initialize(GridBoxCenter, GridBoxExtent, GridCellSize, Positions.Num());
+}
+
+/**
+ * @brief Visualizes the spatial hash grid cells and active boundaries
+ */
+void UBoidSystem::DrawDebugSpatialGrid() const
+{
+    if (!OwnerManager)
+    {
+        return;
+    }
+
+    const UWorld* World = OwnerManager->GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    const FVector Min = SpatialGrid.GetMinBounds();
+    const FVector Max = SpatialGrid.GetMaxBounds();
+    const FIntVector Dims = SpatialGrid.GetDimensions();
+    const FVector CellExtent = SpatialGrid.GetCellExtent();
+
+    // Draw overall grid bounding box (Cyan)
+    const FVector GridCenter = (Min + Max) * 0.5f;
+    const FVector GridExtent = (Max - Min) * 0.5f;
+    DrawDebugBox(World, GridCenter, GridExtent, FColor::Cyan, false, 0.0f, 0, 30.f);
+
+    // Locate observed debug boid's cell if applicable
+    const int32 DebugIdx = OwnerManager->GetDebugBoidIndex();
+    FIntVector DebugBoidCellCoord(-1, -1, -1);
+    if (Positions.IsValidIndex(DebugIdx))
+    {
+        DebugBoidCellCoord = SpatialGrid.GetCellCoords(Positions[DebugIdx]);
+    }
+
+    // Draw active/occupied cells
+    for (int32 Z = 0; Z < Dims.Z; ++Z)
+    {
+        for (int32 Y = 0; Y < Dims.Y; ++Y)
+        {
+            for (int32 X = 0; X < Dims.X; ++X)
+            {
+                const FIntVector Coord(X, Y, Z);
+                const int32 CellIdx = SpatialGrid.ToCellIndex(Coord);
+
+                const bool bIsDebugBoidCell = (Coord == DebugBoidCellCoord);
+                const bool bIsOccupied = SpatialGrid.IsCellOccupied(CellIdx);
+
+                if (bIsDebugBoidCell)
+                {
+                    // Bright Green box for the cell containing the observed boid
+                    DrawDebugBox(World, SpatialGrid.GetCellCenter(Coord), CellExtent, FColor::Green, false, 0.0f, 0, 30.f);
+                }
+                else if (bIsOccupied)
+                {
+                    // Yellow box for occupied cells
+                    DrawDebugBox(World, SpatialGrid.GetCellCenter(Coord), CellExtent, FColor(255, 215, 0, 100), false, 0.0f, 0, 30.f);
+                }else
+                {
+                    // The rest in black
+                    DrawDebugBox(World, SpatialGrid.GetCellCenter(Coord), CellExtent, FColor::Black, false, 0.0f, 0, 30.f);
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -424,8 +534,8 @@ void UBoidSystem::CalculateBoundaryForces(TArray<FVector>& OutForces) const
         return;
     }
 
-    const FVector BoxOrigin = OwnerManager->SpawnVolume->GetComponentLocation();
-    const FVector BoxExtent = OwnerManager->SpawnVolume->GetScaledBoxExtent();
+    const FVector BoxOrigin = OwnerManager->SpawnVolume ? OwnerManager->SpawnVolume->GetComponentLocation() : OwnerManager->BoxCenter;
+    const FVector BoxExtent = OwnerManager->SpawnVolume ? OwnerManager->SpawnVolume->GetScaledBoxExtent() : OwnerManager->BoxExtent;
 
     // Lambda function that calculates boundary repulsion force for a single axis
     // Creates a smooth force field that increases as boids approach boundaries
@@ -613,9 +723,9 @@ void UBoidSystem::UpdatePositions(const float DeltaTime)
 }
 
 /**
- * @brief Finds all neighbors for each boid
- * @details Multithreaded calculation that determines which boids are visible
- *          to each other based on distance and field of view
+ * @brief Finds all neighbors for each boid accelerated by the 3D Spatial Hash Grid
+ * @details Uses SpatialGrid.QuerySphere to only test boids in candidate cells,
+ *          replacing O(N^2) brute force with near O(N) spatial queries.
  */
 void UBoidSystem::FindAllNeighbors()
 {
@@ -628,35 +738,35 @@ void UBoidSystem::FindAllNeighbors()
     TArray<TArray<int32>> TempNeighbors;
     TempNeighbors.SetNum(NumBoids);
 
-    // Multi-threaded neighbor detection for performance optimization
+    // Multi-threaded neighbor detection accelerated by Spatial Hash Grid
     ParallelFor(NumBoids, [&](const int32 i)
     {
         TArray<int32>& MyNeighbors = TempNeighbors[i];
         const FVector& MyPosition = Positions[i];
         const FVector& MyDirection = Directions[i];
         
-        for (int32 j = 0; j < NumBoids; ++j)
+        SpatialGrid.QuerySphere(MyPosition, PerceptionRadius, [&](const int32 CandidateIdx)
         {
-            if (i == j)
+            if (i == CandidateIdx)
             {
-                continue;
+                return;
             }
-            
-            const float DistSquared = FVector::DistSquared(MyPosition, Positions[j]);
+
+            const float DistSquared = FVector::DistSquared(MyPosition, Positions[CandidateIdx]);
             
             if (DistSquared <= PerceptionRadiusSq)
             {
                 // Field of view check using dot product
                 // Only boids within the vision cone are considered neighbor
-                const FVector DirectionToOther = (Positions[j] - MyPosition).GetSafeNormal();
+                const FVector DirectionToOther = (Positions[CandidateIdx] - MyPosition).GetSafeNormal();
                 const float DotProduct = FVector::DotProduct(MyDirection, DirectionToOther);
                 
                 if (DotProduct >= FOVDotProductThreshold)
                 {
-                    MyNeighbors.Add(j);
+                    MyNeighbors.Add(CandidateIdx);
                 }
             }
-        }
+        });
     });
 
     // Transfer results from temporary arrays to persistent cache
@@ -673,4 +783,3 @@ void UBoidSystem::FindAllNeighbors()
     
     LastFrameMaxNeighbors = FMath::Max(1, MaxNeighborsThisFrame + (MaxNeighborsThisFrame / 4));
 }
-

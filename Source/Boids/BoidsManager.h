@@ -5,7 +5,6 @@
 #include "Components/BoxComponent.h"
 #include "BoidsManager.generated.h"
 
-
 //////// FORWARD DECLARATION ////////
 class UBoidSystem;
 class ABoid;
@@ -31,6 +30,19 @@ public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Boids|Spawning")
     UBoxComponent* SpawnVolume;
 
+    //////// SPATIAL HASH GRID ////////
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Boids|Spatial Grid")
+    FVector BoxCenter = FVector::ZeroVector;
+    
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Boids|Spatial Grid")
+    FVector BoxExtent = FVector(500.0f, 500.0f, 500.0f);
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Boids|Spatial Grid", meta = (ClampMin = "10.0", ClampMax = "5000.0"))
+    float CellSize = 200.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Boids|Debug")
+    bool bDebugDrawGrid = true;
+    
     //////// PROPERTIES ////////
     UPROPERTY(EditAnywhere, Category = "Boids|Spawning")
     TSubclassOf<ABoid> BoidPrefab;
@@ -94,7 +106,7 @@ public:
     FORCEINLINE int32 GetNumberOfRaycasts() const { return NumberOfRaycasts; }
     
     UFUNCTION(BlueprintPure, Category = "Boids|Observed Unit")
-    FORCEINLINE int32 GetDebugBoidIndex()const{ return DebugBoidIndex;}
+    FORCEINLINE int32 GetDebugBoidIndex() const { return DebugBoidIndex; }
     
     // Boundary
     UFUNCTION(BlueprintPure, Category = "Boids|Obstacle Avoidance")
@@ -102,6 +114,13 @@ public:
 
     UFUNCTION(BlueprintPure, Category = "Boids|Obstacle Avoidance")
     FORCEINLINE bool GetUseUniformDistribution() const { return bUseUniformDistribution; }
+
+    // Spatial Grid
+    UFUNCTION(BlueprintPure, Category = "Boids|Spatial Grid")
+    FORCEINLINE float GetCellSize() const { return CellSize; }
+
+    UFUNCTION(BlueprintPure, Category = "Boids|Spatial Grid")
+    FORCEINLINE bool GetDebugDrawGrid() const { return bDebugDrawGrid; }
 
     //////// SETTERS ////////
     /// General
@@ -153,6 +172,13 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Boids|Observed Unit")
     void SetDebugBoidIndex(const int32 NewValue);
 
+    // Spatial Grid
+    UFUNCTION(BlueprintCallable, Category = "Boids|Spatial Grid")
+    void SetCellSize(const float NewValue);
+
+    UFUNCTION(BlueprintCallable, Category = "Boids|Spatial Grid")
+    void SetDebugDrawGrid(const bool bNewValue);
+
 protected:
     //////// PROPERTIES ////////
     /// System
@@ -162,7 +188,7 @@ protected:
 private:
     //////// PROPERTIES ////////
     /// General
-    UPROPERTY(EditAnywhere, Category = "Boids|General", meta = (ClampMin = "1", ClampMax = "2000"))
+    UPROPERTY(EditAnywhere, Category = "Boids|General", meta = (ClampMin = "1", ClampMax = "10000"))
     int32 NumberOfBoids = 100;
     
     UPROPERTY(EditAnywhere, Category = "Boids|General", meta = (ClampMin = "1.0", ClampMax = "2000.0"))

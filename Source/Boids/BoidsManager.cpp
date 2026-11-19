@@ -1,6 +1,7 @@
 ﻿#include "BoidsManager.h"
 #include "Boid.h"
 #include "BoidSystem.h"
+#include "Components/BoxComponent.h"
 
 /**
  * @brief Default constructor
@@ -11,10 +12,14 @@ ABoidsManager::ABoidsManager()
 	PrimaryActorTick.bCanEverTick = true;
 
 	NumberOfBoids = 100;
+	BoxCenter = FVector::ZeroVector;
+	BoxExtent = FVector(500.0f, 500.0f, 500.0f);
+	CellSize = 200.0f;
+	bDebugDrawGrid = true;
 
 	SpawnVolume = CreateDefaultSubobject<UBoxComponent>(TEXT("SpawnVolume"));
 	SpawnVolume->SetupAttachment(RootComponent);
-	SpawnVolume->SetBoxExtent(FVector(500.0f, 500.0f, 500.0f));
+	SpawnVolume->SetBoxExtent(BoxExtent);
 	SpawnVolume->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	SpawnVolume->SetCollisionResponseToAllChannels(ECR_Ignore);
     
@@ -32,6 +37,12 @@ ABoidsManager::ABoidsManager()
 void ABoidsManager::BeginPlay()
 {
 	Super::BeginPlay();
+
+	if (SpawnVolume)
+	{
+		BoxCenter = SpawnVolume->GetComponentLocation();
+		BoxExtent = SpawnVolume->GetScaledBoxExtent();
+	}
 
 	BoidSystem = NewObject<UBoidSystem>(this);
 	BoidSystem->OwnerManager = this;
@@ -67,6 +78,12 @@ void ABoidsManager::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 
+	if (SpawnVolume)
+	{
+		BoxCenter = SpawnVolume->GetComponentLocation();
+		BoxExtent = SpawnVolume->GetScaledBoxExtent();
+	}
+
 	// Skip for Class Default Object (CDO) - prevents crashes during engine startup
 	// and avoids operations on template instances that should not affect the world
 	if (BoidSystem && !HasAnyFlags(RF_ClassDefaultObject))
@@ -87,9 +104,12 @@ void ABoidsManager::SpawnBoids()
 		UE_LOG(LogTemp, Error, TEXT("Boid non défini dans BoidManager!"));
 		return;
 	}
-	
-	const FVector BoxOrigin = SpawnVolume->GetComponentLocation();
-	const FVector BoxExtent = SpawnVolume->GetScaledBoxExtent();
+
+	if (SpawnVolume)
+	{
+		BoxCenter = SpawnVolume->GetComponentLocation();
+		BoxExtent = SpawnVolume->GetScaledBoxExtent();
+	}
 	
 	TArray<FVector> InitialPositions;
 	TArray<FVector> InitialDirections;
@@ -107,7 +127,7 @@ void ABoidsManager::SpawnBoids()
 			FMath::RandRange(-BoxExtent.Z, BoxExtent.Z)
 		);
         
-		const FVector SpawnLocation = BoxOrigin + RandomOffset;
+		const FVector SpawnLocation = BoxCenter + RandomOffset;
 		const FRotator SpawnRotation = FMath::VRand().Rotation();
         
 		FActorSpawnParameters SpawnParams;
@@ -184,11 +204,16 @@ void ABoidsManager::SyncParametersToSystem() const
 
 		BoidSystem->SetUseUniformDistribution(bUseUniformDistribution);
 
+		const FVector CurrentBoxCenter = SpawnVolume ? SpawnVolume->GetComponentLocation() : BoxCenter;
+		const FVector CurrentBoxExtent = SpawnVolume ? SpawnVolume->GetScaledBoxExtent() : BoxExtent;
+		BoidSystem->SetSpatialGridParameters(CurrentBoxCenter, CurrentBoxExtent, CellSize);
+
 		UE_LOG(LogTemp, Display, TEXT("Boids Collision Parameters Updated:"));
 		UE_LOG(LogTemp, Display, TEXT("  - Obstacle Avoidance: %s"), bEnableObstacleAvoidance ? TEXT("Enabled") : TEXT("Disabled"));
 		UE_LOG(LogTemp, Display, TEXT("  - Detection Distance: %f"), ObstacleDetectionDistance);
 		UE_LOG(LogTemp, Display, TEXT("  - Avoidance Weight: %f"), ObstacleAvoidanceWeight);
 		UE_LOG(LogTemp, Display, TEXT("  - Number of Raycasts: %d"), NumberOfRaycasts);
+		UE_LOG(LogTemp, Display, TEXT("  - Spatial Grid Cell Size: %f"), CellSize);
 	}
 }
 
@@ -201,42 +226,42 @@ void ABoidsManager::SyncParametersToSystem() const
  */
 FVector ABoidsManager::ConstrainPositionToBox(const FVector& Position) const
 {
-	const FVector BoxOrigin = SpawnVolume->GetComponentLocation();
-	const FVector BoxExtent = SpawnVolume->GetScaledBoxExtent();
-	const FVector LocalPos = Position - BoxOrigin;
+	const FVector EffectiveCenter = SpawnVolume ? SpawnVolume->GetComponentLocation() : BoxCenter;
+	const FVector EffectiveExtent = SpawnVolume ? SpawnVolume->GetScaledBoxExtent() : BoxExtent;
+	const FVector LocalPos = Position - EffectiveCenter;
 	
 	FVector ConstrainedPos = LocalPos;
 
 	// Clamp position to box boundaries
 	// For each axis: if position exceeds box limit, set to the boundary value
 	// This creates an invisible barrier at the spawn volume edges to keep boids contained
-	if (LocalPos.X < -BoxExtent.X) 
-		ConstrainedPos.X = -BoxExtent.X;
-	else if (LocalPos.X > BoxExtent.X) 
-		ConstrainedPos.X = BoxExtent.X;
+	if (LocalPos.X < -EffectiveExtent.X) 
+		ConstrainedPos.X = -EffectiveExtent.X;
+	else if (LocalPos.X > EffectiveExtent.X) 
+		ConstrainedPos.X = EffectiveExtent.X;
         
-	if (LocalPos.Y < -BoxExtent.Y) 
-		ConstrainedPos.Y = -BoxExtent.Y;
-	else if (LocalPos.Y > BoxExtent.Y) 
-		ConstrainedPos.Y = BoxExtent.Y;
+	if (LocalPos.Y < -EffectiveExtent.Y) 
+		ConstrainedPos.Y = -EffectiveExtent.Y;
+	else if (LocalPos.Y > EffectiveExtent.Y) 
+		ConstrainedPos.Y = EffectiveExtent.Y;
         
-	if (LocalPos.Z < -BoxExtent.Z) 
-		ConstrainedPos.Z = -BoxExtent.Z;
-	else if (LocalPos.Z > BoxExtent.Z) 
-		ConstrainedPos.Z = BoxExtent.Z;
+	if (LocalPos.Z < -EffectiveExtent.Z) 
+		ConstrainedPos.Z = -EffectiveExtent.Z;
+	else if (LocalPos.Z > EffectiveExtent.Z) 
+		ConstrainedPos.Z = EffectiveExtent.Z;
 
 	// Convert back to world space by adding the box origin
-	return BoxOrigin + ConstrainedPos;
+	return EffectiveCenter + ConstrainedPos;
 }
 
 /**
  * @brief Sets the number of boids to generate
  * 
- * @param NewValue The new number of boids (clamped between 1 and 2000)
+ * @param NewValue The new number of boids (clamped between 1 and 4000)
  */
 void ABoidsManager::SetNumberOfBoids(const int32 NewValue)
 {
-	NumberOfBoids = FMath::Clamp(NewValue, 1, 2000);
+	NumberOfBoids = FMath::Clamp(NewValue, 1, 4000);
 	SyncParametersToSystem();
 }
 
@@ -395,6 +420,17 @@ void ABoidsManager::SetUseUniformDistribution(const bool bNewValue)
 void ABoidsManager::SetDebugBoidIndex(const int32 NewValue)
 {
 	DebugBoidIndex = NewValue;
+}
+
+void ABoidsManager::SetCellSize(const float NewValue)
+{
+	CellSize = FMath::Clamp(NewValue, 10.0f, 5000.0f);
+	SyncParametersToSystem();
+}
+
+void ABoidsManager::SetDebugDrawGrid(const bool bNewValue)
+{
+	bDebugDrawGrid = bNewValue;
 }
 
 #if WITH_EDITOR
