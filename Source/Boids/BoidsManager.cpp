@@ -1,5 +1,4 @@
 ﻿#include "BoidsManager.h"
-#include "Boid.h"
 #include "BoidSystem.h"
 #include "Components/BoxComponent.h"
 
@@ -28,6 +27,10 @@ ABoidsManager::ABoidsManager()
 		SpawnVolume->SetHiddenInGame(false);
 		SpawnVolume->SetVisibility(true);
 	}
+	
+	FishISM = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("FishISM"));
+	RootComponent = FishISM;
+	FishISM->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 }
 
 /**
@@ -99,11 +102,13 @@ void ABoidsManager::OnConstruction(const FTransform& Transform)
  */
 void ABoidsManager::SpawnBoids()
 {
-	if (!BoidPrefab)
+	if (!FishISM || !BoidSystem)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Boid non défini dans BoidManager!"));
+		UE_LOG(LogTemp, Error, TEXT("FishISM ou BoidSystem non défini dans BoidManager!"));
 		return;
 	}
+
+	FishISM->ClearInstances();
 
 	if (SpawnVolume)
 	{
@@ -113,47 +118,33 @@ void ABoidsManager::SpawnBoids()
 	
 	TArray<FVector> InitialPositions;
 	TArray<FVector> InitialDirections;
-	TArray<ABoid*> SpawnedBoids;
+	TArray<FTransform> InitialTransforms;
 	
 	InitialPositions.Reserve(NumberOfBoids);
 	InitialDirections.Reserve(NumberOfBoids);
-	SpawnedBoids.Reserve(NumberOfBoids);
-	
-	for (int32 i = 0; i < NumberOfBoids; i++)
+	InitialTransforms.Reserve(NumberOfBoids);
+
+	for (int32 i = 0; i < NumberOfBoids; ++i)
 	{
 		const FVector RandomOffset = FVector(
 			FMath::RandRange(-BoxExtent.X, BoxExtent.X),
 			FMath::RandRange(-BoxExtent.Y, BoxExtent.Y),
 			FMath::RandRange(-BoxExtent.Z, BoxExtent.Z)
 		);
-        
 		const FVector SpawnLocation = BoxCenter + RandomOffset;
-		const FRotator SpawnRotation = FMath::VRand().Rotation();
-        
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		const FVector RandomDirection = FMath::VRand();
+		const FRotator SpawnRotation = RandomDirection.Rotation();
+		const FVector Scale = FVector(1.0f);
 
-		if (ABoid* NewBoid = GetWorld()->SpawnActor<ABoid>(BoidPrefab, SpawnLocation, SpawnRotation, SpawnParams))
-		{
-			NewBoid->BoidsManager = this;
-			NewBoid->BoidSystem = BoidSystem;
-			
-			const FVector RandomDirection = FMath::VRand();
-			
-			InitialDirections.Add(RandomDirection);
-			InitialPositions.Add(SpawnLocation);
-			SpawnedBoids.Add(NewBoid);
-		}
+		const FTransform InstanceTransform(SpawnRotation, SpawnLocation, Scale);
+		InitialTransforms.Add(InstanceTransform);
+		InitialDirections.Add(RandomDirection);
+		InitialPositions.Add(SpawnLocation);
 	}
 	
-	BoidSystem->Initialize(SpawnedBoids.Num(), InitialPositions, InitialDirections);
+	FishISM->AddInstances(InitialTransforms, false, true);
 
-	for (int32 i = 0; i < SpawnedBoids.Num(); i++)
-	{
-		BoidSystem->SetActor(i, SpawnedBoids[i]);
-		SpawnedBoids[i]->BoidIndex = i;
-		SpawnedBoids[i]->bDebugRaycasts = bDebugRaycasts;
-	}
+	BoidSystem->Initialize(NumberOfBoids, InitialPositions, InitialDirections);
 }
 
 /**
@@ -162,15 +153,9 @@ void ABoidsManager::SpawnBoids()
  */
 void ABoidsManager::RespawnBoids()
 {
-	if (BoidSystem)
+	if (FishISM)
 	{
-		for (const TArray<ABoid*>& AllActors = BoidSystem->GetActors(); ABoid* Boid : AllActors)
-		{
-			if (Boid)
-			{
-				Boid->Destroy();
-			}
-		}
+		FishISM->ClearInstances();
 	}
 	
 	SpawnBoids();
@@ -420,6 +405,11 @@ void ABoidsManager::SetUseUniformDistribution(const bool bNewValue)
 void ABoidsManager::SetDebugBoidIndex(const int32 NewValue)
 {
 	DebugBoidIndex = NewValue;
+}
+
+void ABoidsManager::SetDebugRaycasts(const bool bNewValue)
+{
+	bDebugRaycasts = bNewValue;
 }
 
 void ABoidsManager::SetCellSize(const float NewValue)

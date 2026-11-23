@@ -1,6 +1,5 @@
 ﻿#include "BoidSystem.h"
 #include "BoidsManager.h"
-#include "Boid.h"
 #include "DrawDebugHelpers.h"
 
 /**
@@ -26,12 +25,13 @@ void UBoidSystem::Initialize(const int32 NumBoids, const TArray<FVector>& Initia
 {
     Positions.SetNum(NumBoids);
     Directions.SetNum(NumBoids);
-    BoidActors.SetNum(NumBoids);
+    FishTransforms.SetNum(NumBoids);
     
     for (int32 i = 0; i < NumBoids; ++i)
     {
         Positions[i] = InitialPositions.IsValidIndex(i) ? InitialPositions[i] : FVector::ZeroVector;
         Directions[i] = InitialDirections.IsValidIndex(i) ? InitialDirections[i].GetSafeNormal() : FVector(1.0f, 0.0f, 0.0f);
+        FishTransforms[i] = FTransform(Directions[i].Rotation(), Positions[i], FVector::OneVector);
     }
     
     NeighborCache.Initialize(NumBoids);
@@ -45,12 +45,9 @@ void UBoidSystem::Initialize(const int32 NumBoids, const TArray<FVector>& Initia
     GlobalObstacleQueryParams = FCollisionQueryParams::DefaultQueryParam;
     GlobalObstacleQueryParams.bTraceComplex = false;
     
-    for (const ABoid* Boid : BoidActors)
+    if (OwnerManager)
     {
-        if (Boid)
-        {
-            GlobalObstacleQueryParams.AddIgnoredActor(Boid);
-        }
+        GlobalObstacleQueryParams.AddIgnoredActor(OwnerManager);
     }
 
     if (OwnerManager)
@@ -178,7 +175,11 @@ void UBoidSystem::Update(const float DeltaTime)
     if (bEnableProfiling) StartPositionsTime = FPlatformTime::Seconds();
     
     UpdatePositions(DeltaTime);
-
+    if (OwnerManager && OwnerManager->FishISM)
+    {
+        OwnerManager->FishISM->BatchUpdateInstancesTransforms(0, FishTransforms, true, true, true);
+    }
+    
     if (bEnableProfiling)
     {
         ProfilingData.UpdatePositionsTime = FPlatformTime::Seconds() - StartPositionsTime;
@@ -193,10 +194,17 @@ void UBoidSystem::Update(const float DeltaTime)
         }
     }
 
-    // 3. Debug visualization of spatial grid
-    if (OwnerManager && OwnerManager->GetDebugDrawGrid())
+    // 3. Debug visualization
+    if (OwnerManager)
     {
-        DrawDebugSpatialGrid();
+        if (OwnerManager->GetDebugDrawGrid())
+        {
+            DrawDebugSpatialGrid();
+        }
+        if (OwnerManager->GetDebugRaycasts())
+        {
+            DrawDebugBoidRaycasts();
+        }
     }
 }
 
@@ -714,13 +722,15 @@ void UBoidSystem::UpdatePositions(const float DeltaTime)
     {
         const FVector Movement = Directions[i] * Velocity * DeltaTime;
         Positions[i] += Movement;
-        
-        if (BoidActors[i] && BoidActors[i]->BoidsManager)
+        if (OwnerManager)
         {
-            Positions[i] = BoidActors[i]->BoidsManager->ConstrainPositionToBox(Positions[i]);
+            Positions[i] = OwnerManager->ConstrainPositionToBox(Positions[i]);
         }
+        FishTransforms[i].SetLocation(Positions[i]);
+        FishTransforms[i].SetRotation(Directions[i].ToOrientationQuat());
     });
 }
+
 
 /**
  * @brief Finds all neighbors for each boid accelerated by the 3D Spatial Hash Grid
@@ -782,4 +792,119 @@ void UBoidSystem::FindAllNeighbors()
     }
     
     LastFrameMaxNeighbors = FMath::Max(1, MaxNeighborsThisFrame + (MaxNeighborsThisFrame / 4));
+}
+
+/**
+ * @brief Draws debug visualization for obstacle detection raycasts and neighbor perception
+ */
+void UBoidSystem::DrawDebugBoidRaycasts() const
+{
+    if (!OwnerManager || !OwnerManager->GetWorld())
+    {
+        return;
+    }
+    
+    const int32 DebugIndex = OwnerManager->GetDebugBoidIndex();
+    if (!Positions.IsValidIndex(DebugIndex))
+    {
+        return;
+    }
+    
+    const UWorld* World = OwnerManager->GetWorld();
+    const FVector CurrentLocation = Positions[DebugIndex];
+    const FVector Direction = Directions[DebugIndex].GetSafeNormal();
+    
+    DrawDebugLine(
+        World,
+        CurrentLocation,
+        CurrentLocation + Direction * 100.0f,
+        FColor::Red,
+        false,
+        0.0f,
+        0,
+        2.0f
+    );
+    
+    for (const FRotator& Rotator : RaycastRotators)
+    {
+        const FVector RayDirection = Rotator.RotateVector(Direction);
+        
+        FHitResult HitResult;
+        const bool bHit = World->LineTraceSingleByChannel(
+            HitResult,
+            CurrentLocation,
+            CurrentLocation + RayDirection * ObstacleDetectionDistance,
+            ECC_WorldStatic,
+            GlobalObstacleQueryParams
+        );
+        
+        const FColor LineColor = bHit ? FColor::Green : FColor::Yellow;
+        const float LineThickness = bHit ? 3.0f : 1.0f;
+        
+        DrawDebugLine(
+            World,
+            CurrentLocation,
+            bHit ? HitResult.ImpactPoint : CurrentLocation + RayDirection * ObstacleDetectionDistance,
+            LineColor,
+            false,
+            0.0f,
+            0,
+            LineThickness
+        );
+        
+        if (bHit)
+        {
+            DrawDebugSphere(
+                World,
+                HitResult.ImpactPoint,
+                10.0f,
+                8,
+                FColor::Red,
+                false,
+                0.0f,
+                0,
+                1.0f
+            );
+            
+            DrawDebugLine(
+                World,
+                HitResult.ImpactPoint,
+                HitResult.ImpactPoint + HitResult.ImpactNormal * 50.0f,
+                FColor::Blue,
+                false,
+                0.0f,
+                0,
+                2.0f
+            );
+        }
+    }
+    
+    DrawDebugSphere(
+        World,
+        CurrentLocation,
+        PerceptionRadius,
+        8,
+        FColor::Red,
+        false,
+        0.0f,
+        0,
+        1.0f
+    );
+    
+    for (const int32 NeighborIdx : GetNeighbors(DebugIndex))
+    {
+        if (Positions.IsValidIndex(NeighborIdx))
+        {
+            DrawDebugLine(
+                World,
+                CurrentLocation,
+                Positions[NeighborIdx],
+                FColor::Blue,
+                false,
+                0.0f,
+                0,
+                2.0f
+            );
+        }
+    }
 }

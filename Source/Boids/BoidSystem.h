@@ -6,7 +6,6 @@
 #include "BoidSystem.generated.h"
 
 //////// FORWARD DECLARATION ////////
-class ABoid;
 class ABoidsManager;
 
 //////// CLASS ////////
@@ -45,6 +44,7 @@ public:
 
     /// Debug
     void DrawDebugSpatialGrid() const;
+    void DrawDebugBoidRaycasts() const;
 
     //////// GETTERS ////////
     /// Positioning
@@ -52,15 +52,13 @@ public:
     
     FORCEINLINE FVector GetDirection(const int32 Index) const { return Directions.IsValidIndex(Index) ? Directions[Index] : FVector::ZeroVector; }
 
+    /// Transforms
+    FORCEINLINE const TArray<FTransform>& GetTransforms() const { return FishTransforms; }
+
     /// Obstacle Avoidance
     FORCEINLINE float GetObstacleDetectionDistance() const { return ObstacleDetectionDistance; }
     
     FORCEINLINE bool IsObstacleAvoidanceEnabled() const { return bEnableObstacleAvoidance; }
-
-    /// Actor
-    FORCEINLINE const TArray<ABoid*>& GetActors() const { return BoidActors; }
-    
-    FORCEINLINE TArray<ABoid*>& GetActors() { return BoidActors; }
 
     /// Debug
     FORCEINLINE const TArray<FRotator>& GetRaycastRotators() const { return RaycastRotators; }
@@ -75,9 +73,6 @@ public:
     FORCEINLINE void SetPosition(const int32 Index, const FVector& Position) { if (Positions.IsValidIndex(Index)) Positions[Index] = Position; }
     
     FORCEINLINE void SetDirection(const int32 Index, const FVector& Direction) { if (Directions.IsValidIndex(Index)) Directions[Index] = Direction; }
-
-    /// Boids
-    FORCEINLINE void SetActor(const int32 Index, ABoid* Actor) { if (BoidActors.IsValidIndex(Index)) BoidActors[Index] = Actor; }
 
     /// Obstacle Avoidance
     void SetUseUniformDistribution(const bool bInUseUniformDistribution);
@@ -96,6 +91,8 @@ public:
         static const TArray<int32> EmptyArray;
         return NeighborCache.Neighbors.IsValidIndex(Index) ? NeighborCache.Neighbors[Index] : EmptyArray;
     }
+    
+    
 
 private:
     // Profiling
@@ -156,7 +153,7 @@ private:
     TArray<FVector> Directions;
 
     UPROPERTY()
-    TArray<ABoid*> BoidActors;
+    TArray<FTransform> FishTransforms;
 
     UPROPERTY()
     TArray<FRotator> RaycastRotators;

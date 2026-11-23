@@ -3,11 +3,12 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Components/BoxComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "BoidsManager.generated.h"
+
 
 //////// FORWARD DECLARATION ////////
 class UBoidSystem;
-class ABoid;
 
 //////// CLASS ////////
 /// Manager responsible for spawning, configuring and coordinating boids behavior simulation
@@ -44,9 +45,9 @@ public:
     bool bDebugDrawGrid = true;
     
     //////// PROPERTIES ////////
-    UPROPERTY(EditAnywhere, Category = "Boids|Spawning")
-    TSubclassOf<ABoid> BoidPrefab;
-
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Fish")
+    UInstancedStaticMeshComponent* FishISM;
+    
     //////// METHODS ////////
     /// Spawning
     void SpawnBoids();
@@ -107,6 +108,9 @@ public:
     
     UFUNCTION(BlueprintPure, Category = "Boids|Observed Unit")
     FORCEINLINE int32 GetDebugBoidIndex() const { return DebugBoidIndex; }
+    
+    UFUNCTION(BlueprintPure, Category = "Boids|Debug")
+    FORCEINLINE bool GetDebugRaycasts() const { return bDebugRaycasts; }
     
     // Boundary
     UFUNCTION(BlueprintPure, Category = "Boids|Obstacle Avoidance")
@@ -172,6 +176,9 @@ public:
     UFUNCTION(BlueprintCallable, Category = "Boids|Observed Unit")
     void SetDebugBoidIndex(const int32 NewValue);
 
+    UFUNCTION(BlueprintCallable, Category = "Boids|Debug")
+    void SetDebugRaycasts(const bool bNewValue);
+
     // Spatial Grid
     UFUNCTION(BlueprintCallable, Category = "Boids|Spatial Grid")
     void SetCellSize(const float NewValue);
@@ -188,7 +195,7 @@ protected:
 private:
     //////// PROPERTIES ////////
     /// General
-    UPROPERTY(EditAnywhere, Category = "Boids|General", meta = (ClampMin = "1", ClampMax = "10000"))
+    UPROPERTY(EditAnywhere, Category = "Boids|General", meta = (ClampMin = "1", ClampMax = "100000"))
     int32 NumberOfBoids = 100;
     
     UPROPERTY(EditAnywhere, Category = "Boids|General", meta = (ClampMin = "1.0", ClampMax = "2000.0"))
