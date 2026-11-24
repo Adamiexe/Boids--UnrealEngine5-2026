@@ -26,7 +26,7 @@ public:
     virtual void Tick(const float DeltaTime) override;
     
     virtual void OnConstruction(const FTransform& Transform) override;
-
+    
     //////// COMPONENTS ////////
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Boids|Spawning")
     UBoxComponent* SpawnVolume;

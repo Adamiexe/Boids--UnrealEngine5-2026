@@ -1,4 +1,4 @@
-# Boids--UnrealEngine5-2025
+# Boids--UnrealEngine5-2026
 
 A highly optimized flocking behavior simulation system implemented in Unreal Engine 5 using C++. This project recreates the classic "boids" algorithm by Craig Reynolds with significant optimizations to support thousands of autonomous agents in real-time, built on principles from his paper ["*Steering Behaviors For Autonomous Characters*"](https://www.red3d.com/cwr/steer/gdc99/).
 
@@ -356,6 +356,9 @@ Key optimizations that contributed to the 96-98% performance improvement:
    - Efficient spatial partitioning for fast neighbor queries
    - Adjustable cell size for optimal performance
    - Debug draw for visualizing the grid
+   
+6. **Instance Static Mesh**
+   - Avoid Cpu overload by first computing all the position of the boids an then draw them all at once
 
 ## How to Use the Project
 
@@ -424,8 +427,7 @@ Both the editor and compiled versions allow real-time adjustments to see immedia
 
 ## Possible Improvements
 
-2. **Rendering Optimizations**
-   - Implement Instanced Static Meshes (ISM) for more efficient rendering
+1. **Rendering Optimizations**
    - Use of compute shaders
 
 3. **Behavioral Enhancements**
